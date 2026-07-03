@@ -9,12 +9,12 @@
 -- Image Asset Constants
 -- ============================================================================
 
-local IMAGE_PATH_ON  = "busking_tools_on.png"
-local IMAGE_PATH_OFF = "busking_tools_off.png"
+local IMAGE_PATH_ON  = "busking_tools_on"
+local IMAGE_PATH_OFF = "busking_tools_off"
 
 -- TODO: Replace with dedicated button images when available
-local BUTTON_IMAGE_PATH_ON  = "busking_tools_on.png"
-local BUTTON_IMAGE_PATH_OFF = "busking_tools_off.png"
+local BUTTON_IMAGE_PATH_ON  = "busking_tools_button_on"
+local BUTTON_IMAGE_PATH_OFF = "busking_tools_button_off"
 
 -- ============================================================================
 -- Color FX Effect Types
@@ -60,8 +60,8 @@ local LAYOUT_ROW_GAP        = 10
 -- Shared State
 -- ============================================================================
 
-local fxOnAppearance   = nil
-local fxOffAppearance  = nil
+local fxOnAppearance   = {}
+local fxOffAppearance  = {}
 local settingsOnAppearance  = nil
 local settingsOffAppearance = nil
 local masterMacrosOffset = nil
@@ -135,9 +135,15 @@ local function generatePrompt()
         return
     end
 
+    local groupOffset = tonumber(result.inputs["01. Groups Offset"])
+    local groupCount  = tonumber(result.inputs["02. Groups Count"])
+    local groupIds = {}
+    for i = groupOffset, groupOffset + groupCount - 1 do
+        table.insert(groupIds, i)
+    end
+
     GeneratePalette({
-        groups_offset       = tonumber(result.inputs["01. Groups Offset"]),
-        groups_count        = tonumber(result.inputs["02. Groups Count"]),
+        group_ids           = groupIds,
         color_preset_offset = tonumber(result.inputs["03. Color Preset Offset"]),
         color_preset_count  = tonumber(result.inputs["04. Color Preset Amount"]),
         fx_offset           = tonumber(result.inputs["05. FX Color Offset"]),
@@ -253,10 +259,10 @@ local function extractColorPresets(offset, amount)
 end
 
 -- ============================================================================
--- extractGroupData — Scans group pool for groups in range
+-- extractGroupData — Scans group pool for groups in the given ID array
 -- ============================================================================
 
-local function extractGroupData(offset, amount)
+local function extractGroupData(groupIds)
     local groupPool = DataPool().Groups
     if not groupPool then
         ErrPrintf("Could not find group pool")
@@ -266,7 +272,7 @@ local function extractGroupData(offset, amount)
     Printf("=================== EXTRACTING GROUPS ===================")
 
     local groups = {}
-    for i = offset, offset + amount - 1 do
+    for _, i in ipairs(groupIds) do
         local grp = groupPool[i]
         if grp then
             table.insert(groups, { id = i, name = grp.name })
@@ -284,7 +290,7 @@ end
 -- generateAppearances — Creates ON/OFF appearances per color
 -- ============================================================================
 
-local function generateAppearances(presets, appearanceOffset, imageOnPool, imageOffPool, fxImageOnPool, fxImageOffPool)
+local function generateAppearances(presets, appearanceOffset, images)
     for i, preset in ipairs(presets) do
         local onIndex  = appearanceOffset + i - 1
         local offIndex = appearanceOffset + i - 1 + #presets
@@ -294,8 +300,8 @@ local function generateAppearances(presets, appearanceOffset, imageOnPool, image
         storeAndLabel(fmt("Appearance %d", offIndex),
             fmt("Picker %s@%d OFF", preset.name, preset.id))
 
-        Cmd(fmt("Assign Image %s At Appearance %d", imageOnPool, onIndex))
-        Cmd(fmt("Assign Image %s At Appearance %d", imageOffPool, offIndex))
+        Cmd(fmt("Assign Image %s At Appearance %d", images.fxImageOn, onIndex))
+        Cmd(fmt("Assign Image %s At Appearance %d", images.fxImageOff, offIndex))
 
         local colorStr = fmt("ImageR %d ImageG %d ImageB %d ImageAlpha 255",
             preset.color.r, preset.color.g, preset.color.b)
@@ -307,31 +313,39 @@ local function generateAppearances(presets, appearanceOffset, imageOnPool, image
     end
 
     -- Dedicated FX ON/OFF appearances using separate FX images
-    local fxOnIndex  = appearanceOffset + #presets * 2
-    local fxOffIndex = fxOnIndex + 1
+    local fxIndex  = appearanceOffset + #presets * 2
 
-    storeAndLabel(fmt("Appearance %d", fxOnIndex),  "Picker FX ON")
-    storeAndLabel(fmt("Appearance %d", fxOffIndex), "Picker FX OFF")
+    for j, fx in ipairs({
+        { name = "Even-Odd", imageOn = images.fxDualImageOn, imageOff = images.fxDualImageOff },
+        { name = "Gradient", imageOn = images.fxGradImageOn, imageOff = images.fxGradImageOff },
+        { name = "Flicker",  imageOn = images.fxDualImageOn, imageOff = images.fxDualImageOff },
+        { name = "Chase",    imageOn = images.fxGradImageOn, imageOff = images.fxGradImageOff },
+    }) do
+        storeAndLabel(fmt("Appearance %d", fxIndex),  "Picker FX " .. fx.name .. " ON")
+        storeAndLabel(fmt("Appearance %d", fxIndex + #EFFECTS), "Picker FX " .. fx.name .. " OFF")
 
-    Cmd(fmt("Assign Image %s At Appearance %d", fxImageOnPool,  fxOnIndex))
-    Cmd(fmt("Assign Image %s At Appearance %d", fxImageOffPool, fxOffIndex))
+        Cmd(fmt("Assign Image %s At Appearance %d", fx.imageOn,  fxIndex))
+        Cmd(fmt("Assign Image %s At Appearance %d", fx.imageOff, fxIndex + #EFFECTS))
 
-    local fxColorStr = "ImageR 255 ImageG 255 ImageB 255 ImageAlpha 255"
-    Cmd(fmt("Set Appearance %d %s", fxOnIndex,  fxColorStr))
-    Cmd(fmt("Set Appearance %d %s", fxOffIndex, fxColorStr))
+        local fxColorStr = "ImageR 255 ImageG 255 ImageB 255 ImageAlpha 255"
+        Cmd(fmt("Set Appearance %d %s", fxIndex,  fxColorStr))
+        Cmd(fmt("Set Appearance %d %s", fxIndex + #EFFECTS, fxColorStr))
 
-    fxOnAppearance  = fxOnIndex
-    fxOffAppearance = fxOffIndex
+        fxOnAppearance[fx.name]  = fxIndex
+        fxOffAppearance[fx.name] = fxIndex + #EFFECTS
+
+        fxIndex = fxIndex + 1
+    end
 
     -- Settings page ON/OFF appearances
-    local settingsOnIndex  = fxOffIndex + 1
+    local settingsOnIndex  = fxIndex + #EFFECTS
     local settingsOffIndex = settingsOnIndex + 1
 
     storeAndLabel(fmt("Appearance %d", settingsOnIndex),  "Settings ON")
     storeAndLabel(fmt("Appearance %d", settingsOffIndex), "Settings OFF")
 
-    Cmd(fmt("Assign Image %s At Appearance %d", fxImageOnPool,  settingsOnIndex))
-    Cmd(fmt("Assign Image %s At Appearance %d", fxImageOffPool, settingsOffIndex))
+    Cmd(fmt("Assign Image %s At Appearance %d", images.buttonImageOn,  settingsOnIndex))
+    Cmd(fmt("Assign Image %s At Appearance %d", images.buttonImageOff, settingsOffIndex))
 
     local settingsColorStr = "ImageR 255 ImageG 255 ImageB 200 ImageAlpha 255"
     Cmd(fmt("Set Appearance %d %s", settingsOnIndex,  settingsColorStr))
@@ -503,8 +517,9 @@ local function generateSelectorGroup(macroStartIndex, name, colors, fxPresets, g
         end
 
         if effectGroup then
-            table.insert(lines, fmt("Assign Appearance %d At Macro %d Thru %d",
-                fxAppearanceRef,
+            table.insert(lines, fmt("Assign Appearance %d Thru %d At Macro %d Thru %d",
+                fxAppearanceRef[EFFECTS[1]],
+                fxAppearanceRef[EFFECTS[1]] + 3,
                 groupBaseIndex + numColors,
                 groupBaseIndex + numColors - 1 + numEffects * numFxPresets))
         end
@@ -527,14 +542,15 @@ local function generateSelectorGroup(macroStartIndex, name, colors, fxPresets, g
                         firstColorAppearance, firstColorAppearance + numColors - 1,
                         groupBaseIndex, groupBaseIndex + numColors - 1),
 
-                    fmt("Assign Appearance %d At Macro %d Thru %d",
-                        fxAppearanceRef,
+                    fmt("Assign Appearance %d Thru %d At Macro %d Thru %d",
+                        fxAppearanceRef[EFFECTS[1]],
+                        fxAppearanceRef[EFFECTS[1]] + 3,
                         groupBaseIndex + numColors,
                         groupBaseIndex + numColors - 1 + numEffects * numFxPresets),
                 }
 
                 if effectGroup ~= "ALL" then
-                    table.insert(lines, fmt("Assign Appearance %d At Macro %d", fxOnAppearance, macroStartIndex))
+                    table.insert(lines, fmt("Assign Appearance %d At Macro %d", fxOnAppearance[fxName], macroStartIndex))
                 end
 
                 if effectGroup == "ALL" then
@@ -826,7 +842,7 @@ local function generateSettingsLayout(layoutOffset, options, groups, fxPresets)
     local numColors     = options.color_preset_count
     local numEffects    = #EFFECTS
     local numFxPresets  = options.fx_count
-    local numGroups     = options.groups_count
+    local numGroups     = #groups
 
     local seqStart = options.sequences_offset
     local seqEnd   = options.sequences_offset + numGroups - 1
@@ -969,7 +985,7 @@ end
 
 local function importImage(path, label, id)
     deleteIfExists(fmt("Delete Image %s", id))
-    Cmd(fmt("Import Image %s /File '%s'", id, path))
+    Cmd(fmt("Import Image %s /File '%s.png'", id, path))
     Cmd(fmt("Label Image %s '%s'", id, label))
 end
 
@@ -983,20 +999,37 @@ function GeneratePalette(options)
 
     -- Step 1: Import required images
     updateProgress(1, "Importing Assets")
-    local colorImageOn  = fmt("3.%d", options.image_pool_offset)
-    local colorImageOff = fmt("3.%d", options.image_pool_offset + 1)
-    local fxImageOn     = fmt("3.%d", options.image_pool_offset + 2)
-    local fxImageOff    = fmt("3.%d", options.image_pool_offset + 3)
-    importImage(IMAGE_PATH_ON,  "Color Picker ON",  colorImageOn)
-    importImage(IMAGE_PATH_OFF, "Color Picker OFF", colorImageOff)
-    importImage(BUTTON_IMAGE_PATH_ON,  "Button ON",  fxImageOn)
-    importImage(BUTTON_IMAGE_PATH_OFF, "Button OFF", fxImageOff)
+    local colorImageOn   = fmt("3.%d", options.image_pool_offset)
+    local colorImageOff  = fmt("3.%d", options.image_pool_offset + 1)
+    local buttonImageOn  = fmt("3.%d", options.image_pool_offset + 2)
+    local buttonImageOff = fmt("3.%d", options.image_pool_offset + 3)
+    local fxDualImageOn  = fmt("3.%d", options.image_pool_offset + 4)
+    local fxDualImageOff = fmt("3.%d", options.image_pool_offset + 5)
+    local fxGradImageOn  = fmt("3.%d", options.image_pool_offset + 6)
+    local fxGradImageOff = fmt("3.%d", options.image_pool_offset + 7)
+    importImage(BUTTON_IMAGE_PATH_ON,  "Button ON",  buttonImageOn)
+    importImage(BUTTON_IMAGE_PATH_OFF, "Button OFF", buttonImageOff)
+    importImage(IMAGE_PATH_ON  .. "_color",  "Color Picker ON",  colorImageOn)
+    importImage(IMAGE_PATH_OFF .. "_color",  "Color Picker OFF", colorImageOff)
+    importImage(IMAGE_PATH_ON  .. "_dual", "Color Picker Dual ON",  fxDualImageOn)
+    importImage(IMAGE_PATH_OFF .. "_dual", "Color Picker Dual OFF", fxDualImageOff)
+    importImage(IMAGE_PATH_ON  .. "_gradient", "Color Picker Gradient ON",  fxGradImageOn)
+    importImage(IMAGE_PATH_OFF .. "_gradient", "Color Picker Gradient OFF", fxGradImageOff)
 
     -- Step 2: Extract color presets and groups, generate appearances
     updateProgress(2, "Generating Appearances")
     local colors = extractColorPresets(options.color_preset_offset, options.color_preset_count)
-    local groups = extractGroupData(options.groups_offset, options.groups_count)
-    generateAppearances(colors, options.appearance_offset, colorImageOn, colorImageOff, fxImageOn, fxImageOff)
+    local groups = extractGroupData(options.group_ids)
+    generateAppearances(colors, options.appearance_offset, {
+        buttonImageOn = buttonImageOn,
+        buttonImageOff = buttonImageOff,
+        fxImageOn = colorImageOn,
+        fxImageOff = colorImageOff,
+        fxDualImageOn = fxDualImageOn,
+        fxDualImageOff = fxDualImageOff,
+        fxGradImageOn = fxGradImageOn,
+        fxGradImageOff = fxGradImageOff,
+    })
 
     -- Step 3: Generate FX color reference presets
     updateProgress(3, "Generating Base/FX Color Presets")
