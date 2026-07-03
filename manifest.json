@@ -1,0 +1,10 @@
+{
+  "name": "Busking Tools",
+  "author": "Oliwier Michalik",
+  "version": "0.1.0",
+  "path": "BuskingTools",
+  "components": [
+    { "name": "Core", "file": "core.lua" },
+    { "name": "Utilities", "file": "utils.lua" }
+  ]
+}
