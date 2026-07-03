@@ -706,7 +706,7 @@ local function generateLayout(layoutOffset, groups, colors, fxPresets)
     local fxLayoutId     = layoutOffset + 1
 
     -- Master Color Picker layout
-    deleteIfExists(fmt("Delete Layout %d", masterLayoutId))
+    deleteIfExists(fmt("Delete Layout %d.*", masterLayoutId))
     Cmd(fmt("Store Layout %d /Overwrite", masterLayoutId))
     Cmd(fmt("Label Layout %d 'Master Color Picker'", masterLayoutId))
     Cmd(fmt("Select Layout %d", masterLayoutId))
@@ -720,7 +720,7 @@ local function generateLayout(layoutOffset, groups, colors, fxPresets)
     })
 
     -- FX Color Picker layout
-    deleteIfExists(fmt("Delete Layout %d", fxLayoutId))
+    deleteIfExists(fmt("Delete Layout %d.*", fxLayoutId))
     Cmd(fmt("Store Layout %d /Overwrite", fxLayoutId))
     Cmd(fmt("Label Layout %d 'FX Color Picker'", fxLayoutId))
 
@@ -852,7 +852,7 @@ local function generateSettingsLayout(layoutOffset, options, groups, fxPresets)
     local settingsMacroBase = masterMacrosOffset + allMacrosCount
 
     -- Create layout container
-    deleteIfExists(fmt("Delete Layout %d", settingsLayoutId))
+    deleteIfExists(fmt("Delete Layout %d.*", settingsLayoutId))
     Cmd(fmt("Store Layout %d /Overwrite", settingsLayoutId))
     Cmd(fmt("Label Layout %d 'Color Picker Settings'", settingsLayoutId))
 
