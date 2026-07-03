@@ -1,0 +1,6 @@
+**/*.dat
+**/.DS_Store
+**/.ds_store.xml
+**/.vscode
+mvr/
+fixturetypes/

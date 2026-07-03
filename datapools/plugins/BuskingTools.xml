@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<GMA3 DataVersion="2.4.2.2">
+    <UserPlugin Name="Busking Tools" Guid="92 7B 37 DC BE DB 5A 13 23 77 23 5B 42 38 04 F0" Author="Oliwier Michalik" Version="0.0.0.0">
+        <ComponentLua Name="Master" FileName="busking_tools/main.lua" Installed="Yes"/>
+        <ComponentLua Name="Color Palette Generator" FileName="busking_tools/color_palette_generator.lua" Installed="Yes"/>
+    </UserPlugin>
+</GMA3>
