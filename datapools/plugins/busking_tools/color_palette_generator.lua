@@ -33,6 +33,13 @@ local MATRICKS_PATTERNS = {
     "Outwards",
 }
 
+local MATRICKS_CONFIGS = {
+    { wings = 1, phase = {0, 180} },
+    { wings = 1, phase = {180, 0} },
+    { wings = 2, phase = {0, 180} },
+    { wings = 2, phase = {180, 0} },
+}
+
 -- ============================================================================
 -- Layout Dimension Constants
 -- ============================================================================
@@ -357,7 +364,7 @@ end
 -- generateColorSequences — Creates sequences with color and FX cues
 -- ============================================================================
 
-local function generateColorSequences(groups, colors, sequenceOffset, timingMaster, speedMaster, matricksOffset, fxPresets)
+local function generateColorSequences(groups, colors, sequenceOffset, timingMaster, speedMaster, fxPresets)
     Printf("=================== GENERATING SEQUENCES ===================")
 
     for gi, group in ipairs(groups) do
@@ -367,7 +374,7 @@ local function generateColorSequences(groups, colors, sequenceOffset, timingMast
         storeAndLabel(fmt("Sequence %d", seqIndex),
             fmt("Color Picker %s@%d", group.name, group.id))
         Cmd(fmt("Set Sequence %d Property 'RestartMode' 'Current Cue'", seqIndex))
-        Cmd(fmt("Assign SpeedMaster %d At Sequence %d", speedMaster, seqIndex))
+        Cmd(fmt("Set Sequence %d 'SpeedMaster' 'Speed%d'", seqIndex, speedMaster))
 
         local cueIndex = 1
 
@@ -398,6 +405,8 @@ local function generateColorSequences(groups, colors, sequenceOffset, timingMast
             Cmd(fmt("Assign Group %d At Sequence %d Cue %d Part 0.2", group.id, seqIndex, cueIndex))
             Cmd(fmt("Assign Preset 4.%d At Sequence %d Cue %d Part 0.2", fxColor.B, seqIndex, cueIndex))
             Cmd(fmt("Set Sequence %d Cue %d Part 0.2 Property 'XGroup' 2 'X' 2", seqIndex, cueIndex))
+            Cmd(fmt("Assign MAtricks %d At Sequence %d Cue %d Part 0.1", fxColor.matricks_base, seqIndex, cueIndex))
+            Cmd(fmt("Assign MAtricks %d At Sequence %d Cue %d Part 0.2", fxColor.matricks_base, seqIndex, cueIndex))
 
             cueIndex = cueIndex + 1
 
@@ -408,10 +417,10 @@ local function generateColorSequences(groups, colors, sequenceOffset, timingMast
 
             Cmd(fmt("Store Type 'PhaserRecipe' Sequence %d Cue %d Part 0.1", seqIndex, cueIndex))
             Cmd(fmt("Assign Group %d At Sequence %d Cue %d Part 0.1", group.id, seqIndex, cueIndex))
-            Cmd(fmt("Assign Preset 4.%d At Sequence %d Cue %d Part 0.1.'PhaserRecipeSteps'.1.1", fxColor.A, seqIndex, cueIndex))
-            Cmd(fmt("Assign Preset 4.%d At Sequence %d Cue %d Part 0.1.'PhaserRecipeSteps'.2.1", fxColor.B, seqIndex, cueIndex))
+            Cmd(fmt("Assign Preset 4.%d At Sequence %d Cue %d Part 0.1.'PhaserRecipeSteps'.1.1", fxColor.B, seqIndex, cueIndex))
+            Cmd(fmt("Assign Preset 4.%d At Sequence %d Cue %d Part 0.1.'PhaserRecipeSteps'.2.1", fxColor.A, seqIndex, cueIndex))
             Cmd(fmt("Set Sequence %d Cue %d Part 0.1 Property 'SpeedX' 0", seqIndex, cueIndex))
-            Cmd(fmt("Assign MAtricks %d At Sequence %d Cue %d Part 0.1", matricksOffset, seqIndex, cueIndex))
+            Cmd(fmt("Assign MAtricks %d At Sequence %d Cue %d Part 0.1", fxColor.matricks_base, seqIndex, cueIndex))
 
             cueIndex = cueIndex + 1
 
@@ -428,6 +437,7 @@ local function generateColorSequences(groups, colors, sequenceOffset, timingMast
             Cmd(fmt("Set Sequence %d Cue %d Part 0.1 Property 'XShuffle' '17549'", seqIndex, cueIndex))
             Cmd(fmt("Set Sequence %d Cue %d Part 0.1 Property 'PhaseY' '0 Thru 360'", seqIndex, cueIndex))
             Cmd(fmt("Set Sequence %d Cue %d Part 0.1 Property 'YShuffle' '21308'", seqIndex, cueIndex))
+            Cmd(fmt("Assign MAtricks %d At Sequence %d Cue %d Part 0.1", fxColor.matricks_base, seqIndex, cueIndex))
 
             cueIndex = cueIndex + 1
 
@@ -440,7 +450,7 @@ local function generateColorSequences(groups, colors, sequenceOffset, timingMast
             Cmd(fmt("Assign Group %d At Sequence %d Cue %d Part 0.1", group.id, seqIndex, cueIndex))
             Cmd(fmt("Assign Preset 4.%d At Sequence %d Cue %d Part 0.1.'PhaserRecipeSteps'.1.1", fxColor.A, seqIndex, cueIndex))
             Cmd(fmt("Assign Preset 4.%d At Sequence %d Cue %d Part 0.1.'PhaserRecipeSteps'.2.1", fxColor.B, seqIndex, cueIndex))
-            Cmd(fmt("Assign MAtricks %d At Sequence %d Cue %d Part 0.1", matricksOffset + 1, seqIndex, cueIndex))
+            Cmd(fmt("Assign MAtricks %d At Sequence %d Cue %d Part 0.1", fxColor.matricks_base, seqIndex, cueIndex))
 
             cueIndex = cueIndex + 1
         end
@@ -554,7 +564,7 @@ local function generateMacros(groups, colors, macroOffset, fxPresets)
     local macroIndex = macroOffset
 
     -- Per-group picker macros
-    for _, group in ipairs(groups) do
+    for gi, group in ipairs(groups) do
         group.first_macro = macroIndex
         macroIndex = generateSelectorGroup(
             macroIndex,
@@ -590,6 +600,27 @@ local function generateMacros(groups, colors, macroOffset, fxPresets)
                 return { fmt("Copy Preset 4.%d At Preset 4.%d /Merge", color.id, fxColor.B) }
             end
         )
+    end
+
+    -- FX MAtricks direction macros
+    for fxi, fxColor in ipairs(fxPresets) do
+        local blockStart = macroIndex
+        fxColor.matricks_macro_base = blockStart
+        for mi = 1, #MATRICKS_PATTERNS do
+            local cfg = MATRICKS_CONFIGS[mi]
+            local mBase = fxColor.matricks_base
+            local lines = {
+                fmt("Assign Appearance %d Thru %d At Macro %d Thru %d",
+                    settingsOffAppearance, settingsOffAppearance,
+                    blockStart, blockStart + #MATRICKS_PATTERNS - 1),
+                fmt("Assign Appearance %d At Macro %d", settingsOnAppearance, macroIndex),
+                fmt("Set MAtricks %d Property 'XWings' %s",       mBase, cfg.wings),
+                fmt("Set MAtricks %d Property 'PhaseFromX' '%s'", mBase, cfg.phase[1]),
+                fmt("Set MAtricks %d Property 'PhaseToX' '%s'",   mBase, cfg.phase[2]),
+            }
+            assignMacro(macroIndex, fmt("FX%d MAtricks %s", fxi, MATRICKS_PATTERNS[mi]), lines)
+            macroIndex = macroIndex + 1
+        end
     end
 
     -- Master "ALL" macros (trigger all groups)
@@ -664,6 +695,7 @@ local function generateLayout(layoutOffset, groups, colors, fxPresets)
     Cmd(fmt("Label Layout %d 'Master Color Picker'", masterLayoutId))
     Cmd(fmt("Select Layout %d", masterLayoutId))
 
+    local numMatricks = #MATRICKS_PATTERNS
     storeAndLabel(fmt("Layout %d.1", masterLayoutId), "Spacer")
     setLayoutCellProps(masterLayoutId, 1, {
         VisibilityBorder = "Hidden",
@@ -679,7 +711,8 @@ local function generateLayout(layoutOffset, groups, colors, fxPresets)
     storeAndLabel(fmt("Layout %d.1", fxLayoutId), "Spacer")
     setLayoutCellProps(fxLayoutId, 1, {
         VisibilityBorder = "Hidden",
-        Width = LAYOUT_LEFT_MARGIN + numColors * LAYOUT_PICKER_SPACING + LAYOUT_FX_GAP,
+        Width = LAYOUT_LEFT_MARGIN + numColors * LAYOUT_PICKER_SPACING + LAYOUT_FX_GAP
+                + 2 * LAYOUT_PICKER_SPACING + 20,
     })
 
     local elementIndex = { [masterLayoutId] = 2, [fxLayoutId] = 2 }
@@ -713,7 +746,7 @@ local function generateLayout(layoutOffset, groups, colors, fxPresets)
         end
     end
 
-    -- FX Stop A/B rows
+    -- FX Stop A/B rows and MAtricks 2x2 grid
     for fxi, fxColor in ipairs(fxPresets) do
         local baseY = -(fxi - 1) * 130
         elementIndex[fxLayoutId] = generateColorSetRow(
@@ -723,6 +756,27 @@ local function generateLayout(layoutOffset, groups, colors, fxPresets)
         elementIndex[fxLayoutId] = generateColorSetRow(
             fxLayoutId, elementIndex[fxLayoutId],
             baseY - LAYOUT_ROW_HEIGHT, fmt("FX %d Stop B", fxi), fxColor.macroB, colors)
+
+        -- MAtricks 2x2 direction grid for this FX preset
+        local matricksGridX = LAYOUT_LEFT_MARGIN + numColors * LAYOUT_PICKER_SPACING + LAYOUT_FX_GAP
+        for mi = 1, numMatricks do
+            local col = (mi - 1) % 2
+            local row = math.floor((mi - 1) / 2)
+            local macroId = fxColor.matricks_macro_base + mi - 1
+            Cmd(fmt("Assign Macro %d At Layout %d", macroId, fxLayoutId))
+            setLayoutCellProps(fxLayoutId, elementIndex[fxLayoutId], {
+                VisibilityObjectName   = "Hidden",
+                VisibilityBorder       = "Hidden",
+                VisibilityIndicatorBar = "Hidden",
+                CustomTextText = MATRICKS_PATTERNS[mi],
+                CustomTextSize = LAYOUT_LABEL_FONT_SIZE,
+                Width  = LAYOUT_PICKER_SIZE,
+                Height = LAYOUT_PICKER_SIZE,
+                PosX = matricksGridX + col * LAYOUT_PICKER_SPACING,
+                PosY = baseY - row * LAYOUT_ROW_HEIGHT,
+            })
+            elementIndex[fxLayoutId] = elementIndex[fxLayoutId] + 1
+        end
     end
 
     -- Master "ALL" row
@@ -755,14 +809,16 @@ end
 -- generateMAtricksObjects — Creates MAtricks pool objects for patterns
 -- ============================================================================
 
-local function generateMAtricksObjects(matricksOffset)
-    storeAndLabel(fmt("MAtricks %d", matricksOffset),     "Gradient MAtricks")
-    storeAndLabel(fmt("MAtricks %d", matricksOffset + 1), "Chaser MAtricks")
+local function generateMAtricksObjects(matricksOffset, fxPresets)
+    for i, fxColor in ipairs(fxPresets) do
+        fxColor.matricks_base = matricksOffset + (i - 1)
+        storeAndLabel(fmt("MAtricks %d", fxColor.matricks_base), fmt("Color Picker FX%d", i))
+    end
 end
 
 -- ============================================================================
 -- generateSettingsLayout — Creates "Color Picker Settings" layout with
--- fade time, MAtricks selector, and speed multiplier rows
+-- fade time and speed multiplier rows
 -- ============================================================================
 
 local function generateSettingsLayout(layoutOffset, options, groups, fxPresets)
@@ -794,7 +850,6 @@ local function generateSettingsLayout(layoutOffset, options, groups, fxPresets)
     local fadeTimes       = { 0, 1, 2, 5 }
     local speedFactors    = { "Div4", "Div2", "One", "Mul2" }
     local speedLabels     = { "1/4", "1/2", "1", "2" }
-    local mAtricksColCount = #MATRICKS_PATTERNS
     local fadeColCount    = #fadeTimes
     local speedColCount   = #speedFactors
 
@@ -811,14 +866,6 @@ local function generateSettingsLayout(layoutOffset, options, groups, fxPresets)
         end
         return lines
     end
-
-    -- MAtricks pattern configurations
-    local matricksConfigs = {
-        { wings = 1, phase = {180, 0} },
-        { wings = 1, phase = {0, 180} },
-        { wings = 2, phase = {180, 0} },
-        { wings = 2, phase = {0, 180} },
-    }
 
     -- ============ ROW 1: Fade Time ============
     local rowY1 = 0
@@ -859,56 +906,9 @@ local function generateSettingsLayout(layoutOffset, options, groups, fxPresets)
     end
     Cmd(fmt("Call Macro %d", settingsMacroBase))
 
-    -- ============ ROW 2: MAtricks ============
+    -- ============ ROW 2: Speed Multiplier ============
     local rowY2 = -(LAYOUT_ROW_HEIGHT + LAYOUT_ROW_GAP)
-    local matricksMacroBase = settingsMacroBase + fadeColCount
-
-    Cmd(fmt("Store Layout %d.%d", settingsLayoutId, cellIndex))
-    setLayoutCellProps(settingsLayoutId, cellIndex, {
-        Width              = LAYOUT_LABEL_WIDTH,
-        Height             = LAYOUT_LABEL_HEIGHT,
-        VisibilityBorder   = "Hidden",
-        CustomTextText     = "MAtricks",
-        CustomTextSize     = LAYOUT_LABEL_FONT_SIZE,
-        CustomTextAlignmentH = "Right",
-        PosX = 0,
-        PosY = rowY2,
-    })
-    cellIndex = cellIndex + 1
-
-    for i, patternName in ipairs(MATRICKS_PATTERNS) do
-        local cfg = matricksConfigs[i]
-        local macroId = matricksMacroBase + (i - 1)
-        local actions = {
-            fmt("Set MAtricks %d Property 'XWings' %s",       options.matricks_offset,     cfg.wings),
-            fmt("Set MAtricks %d Property 'PhaseFromX' '%s'", options.matricks_offset,     cfg.phase[1]),
-            fmt("Set MAtricks %d Property 'PhaseToX' '%s'",   options.matricks_offset,     cfg.phase[2]),
-            fmt("Set MAtricks %d Property 'XWings' %s",       options.matricks_offset + 1, cfg.wings),
-            fmt("Set MAtricks %d Property 'PhaseFromX' '%s'", options.matricks_offset + 1, cfg.phase[2]),
-            fmt("Set MAtricks %d Property 'PhasetoX' '%s'",   options.matricks_offset + 1, cfg.phase[1]),
-        }
-        assignMacro(macroId, fmt("Settings MAtricks %s", patternName),
-            settingsMacroCommands(macroId, actions, matricksMacroBase, mAtricksColCount))
-
-        Cmd(fmt("Assign Macro %d At Layout %d", macroId, settingsLayoutId))
-        setLayoutCellProps(settingsLayoutId, cellIndex, {
-            VisibilityObjectName   = "Hidden",
-            VisibilityBorder       = "Hidden",
-            VisibilityIndicatorBar = "Hidden",
-            CustomTextText = patternName,
-            CustomTextSize = LAYOUT_LABEL_FONT_SIZE,
-            Width  = LAYOUT_PICKER_SIZE,
-            Height = LAYOUT_PICKER_SIZE,
-            PosX   = LAYOUT_LEFT_MARGIN + (i - 1) * LAYOUT_PICKER_SPACING,
-            PosY   = rowY2,
-        })
-        cellIndex = cellIndex + 1
-    end
-    Cmd(fmt("Call Macro %d", matricksMacroBase))
-
-    -- ============ ROW 3: Speed Multiplier ============
-    local rowY3 = -2 * (LAYOUT_ROW_HEIGHT + LAYOUT_ROW_GAP)
-    local speedMacroBase = matricksMacroBase + mAtricksColCount
+    local speedMacroBase = settingsMacroBase + fadeColCount
 
     Cmd(fmt("Store Layout %d.%d", settingsLayoutId, cellIndex))
     setLayoutCellProps(settingsLayoutId, cellIndex, {
@@ -919,7 +919,7 @@ local function generateSettingsLayout(layoutOffset, options, groups, fxPresets)
         CustomTextSize     = LAYOUT_LABEL_FONT_SIZE,
         CustomTextAlignmentH = "Right",
         PosX = 0,
-        PosY = rowY3,
+        PosY = rowY2,
     })
     cellIndex = cellIndex + 1
 
@@ -941,7 +941,7 @@ local function generateSettingsLayout(layoutOffset, options, groups, fxPresets)
             Width  = LAYOUT_PICKER_SIZE,
             Height = LAYOUT_PICKER_SIZE,
             PosX   = LAYOUT_LEFT_MARGIN + (i - 1) * LAYOUT_PICKER_SPACING,
-            PosY   = rowY3,
+            PosY   = rowY2,
         })
         cellIndex = cellIndex + 1
     end
@@ -959,6 +959,7 @@ local function activateDefaults(fxPresets)
     for _, fxColor in ipairs(fxPresets) do
         Cmd(fmt("Call Macro %d", fxColor.macroA))
         Cmd(fmt("Call Macro %d", fxColor.macroB))
+        Cmd(fmt("Call Macro %d", fxColor.matricks_macro_base))
     end
 end
 
@@ -1000,12 +1001,12 @@ function GeneratePalette(options)
     -- Step 3: Generate FX color reference presets
     updateProgress(3, "Generating Base/FX Color Presets")
     local fxPresets = generateReferencePresets(options.fx_offset, options.fx_count)
-    generateMAtricksObjects(options.matricks_offset)
+    generateMAtricksObjects(options.matricks_offset, fxPresets)
 
     -- Step 4: Generate color sequences
     updateProgress(4, "Generating Color Sequences")
     generateColorSequences(groups, colors, options.sequences_offset,
-        options.timing_master, options.speed_master, options.matricks_offset, fxPresets)
+        options.timing_master, options.speed_master, fxPresets)
 
     -- Step 5: Generate selection macros
     updateProgress(5, "Generating Selection Macros")
