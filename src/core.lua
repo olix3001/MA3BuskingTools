@@ -18,15 +18,21 @@ Self.Preferences = Self.Preferences or {
 -- ============================================================================
 -- Globals and initialization
 -- ============================================================================
-Self.Data = {}
+Self.Data = Self.Data or {}
 
 function Self.InitState(options)
     -- Import globally used images
     local imagesOffset = options and options.imagesOffset or Self.Preferences.Offset
     Self.Data.Images = BuskingTools.Util.ImportImages({
-        { id = "ButtonOff", path = "busking_tools_button_off.png", label = "BuskingTools Button OFF" },
-        { id = "ButtonOn",  path = "busking_tools_button_on.png",  label = "BuskingTools Button ON"  }
+        { id = "ButtonOff", path = "busking_tools_button_off.png", label = "BT Button OFF" },
+        { id = "ButtonOn",  path = "busking_tools_button_on.png",  label = "BT Button ON"  }
     }, imagesOffset)
+
+    -- Generate appearances for buttons
+    local appearancesOffset = (options and options.appearancesOffset or BuskingTools.Core.Preferences.Offset)
+    BuskingTools.Util.BuildAppearance(appearancesOffset,     "BT Button OFF", Self.Data.Images.ButtonOff)
+    BuskingTools.Util.BuildAppearance(appearancesOffset + 1, "BT Button ON",  Self.Data.Images.ButtonOn )
+    Self.Data.Button = { OffAppearance = appearancesOffset, OnAppearance = appearancesOffset + 1 }
 end
 
 -- ============================================================================
@@ -38,7 +44,7 @@ end
 
 function Panic(reason)
     -- TODO: Figure out a better way to stop plugin execution
-    ErrEcho("BuskingTools plugin have failed: " .. reason .. "\nHalting execution by running bad command")
+    ErrEcho("BuskingTools plugin have failed: " .. reason .. "\nHalting execution by running bad command.")
     Cmd("BadCommandToHaltExecution PanicHandler")
 end
 
@@ -51,6 +57,12 @@ function Self.RegisterCleanupHandler(handler)
    table.insert(Self._CleanupActions, handler)
 end
 
+function Self.Warn(message)
+    Self.RegisterCleanupHandler(function()
+        ErrEcho(Fmt("Warning: %s", message))
+    end)
+end
+
 function Self.Cleanup()
     for _, action in ipairs(Self._CleanupActions) do
         action()
@@ -60,9 +72,9 @@ end
 -- ============================================================================
 -- Main plugin function
 -- ============================================================================
-function Main(displayHandle, args)
+local function main(displayHandle, args)
     Printf("BuskingTools: Core loaded")
     Self.InitState()
 end
 
-return Main, Self.Cleanup
+return main, Self.Cleanup

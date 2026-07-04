@@ -6,10 +6,24 @@ local Self = BuskingTools.Util
 -- ============================================================================
 -- Lua QoL extensions
 -- ============================================================================
-function table.extend(table1, table2)
-    for _, element in ipairs(table2) do
-        table.insert(table1, element)
+function table.extend(table1, table2, withKeys)
+    if withKeys then
+        for key, element in pairs(table2) do
+            table1[key] = element
+        end
+    else
+        for _, element in ipairs(table2) do
+            table.insert(table1, element)
+        end
     end
+end
+
+function table.range(from, to)
+    local result = {}
+    for i = from, to do
+        table.insert(result, i)
+    end
+    return result
 end
 
 -- ============================================================================
@@ -110,15 +124,58 @@ function Self.ExtractPresetColor(preset)
     }
 end
 
+function Self.ExtractPresets(pool, presets, getter)
+    local result = {}
+
+    for _, preset in ipairs(presets) do
+        local presetInfo = pool[preset]
+
+        if not presetInfo then
+            BuskingTools.Core.Warn(Fmt("Could not find preset %d (TODO: Which pool). It will be skipped.", preset))
+            goto continue
+        end
+
+        local data = {
+            id = preset,
+            name = presetInfo.name,
+        }
+
+        if getter then
+            table.extend(data, getter(presetInfo), true)
+        end
+
+        result[preset] = data
+
+        ::continue::
+    end
+
+    return result
+end
+
+
 -- ============================================================================
 -- Pool object generation utilities
 -- ============================================================================
-function Self.StoreAndLabel(pattern, label, deleteOld)
+function Self.StoreAndLabel(pattern, label, properties, deleteOld)
     if deleteOld then
         CmdIndirectWait(Fmt("Delete %s /NoConfirmation", pattern))
     end
     Cmd(Fmt("Store %s /Overwrite", pattern))
-    Cmd(Fmt("Label %s '%s'", label))
+    Cmd(Fmt("Label %s '%s'", pattern, label))
+    
+    if properties then
+        Self.SetProperties(pattern, properties)
+    end
+end
+
+function Self.SetProperties(pattern, properties)
+    for prop, value in pairs(properties) do
+        if type(value) == "number" then
+            Cmd(Fmt("Set %s '%s' %s", pattern, prop, value))
+        else
+            Cmd(Fmt("Set %s '%s' '%s'", pattern, prop, tostring(value)))
+        end
+    end
 end
 
 function Self.ImportImages(images, offset)
@@ -131,16 +188,35 @@ function Self.ImportImages(images, offset)
         Cmd(Fmt("Import Image 3.%d /File '%s'", imageId, image.path))
         Cmd(Fmt("Label Image 3.%d '%s'", imageId, image.label))
 
-        result[image.id] = imageId
+        result[image.id] = Fmt("3.%d", imageId)
     end
 
     return result
 end
 
-function Self.BuildMacro(id, label, ...)
+function Self.BuildAppearance(id, label, image, fgColor, bgColor)
+    Self.StoreAndLabel(Fmt("Appearance %d", id), label)
+    Cmd(Fmt("Assign Image %s At Appearance %d", image, id))
+
+    if fgColor then
+        Cmd(Fmt(
+            "Set Appearance %d ImageR %d ImageG %d ImageB %d ImageAlpha %d",
+            id, fgColor.r or 0, fgColor.g or 0, fgColor.b or 0, fgColor.a or 255
+        ))
+    end
+
+    if bgColor then
+        Cmd(Fmt(
+            "Set Appearance %d BackR %d BackG %d BackB %d BackAlpha %d",
+            id, bgColor.r or 0, bgColor.g or 0, bgColor.b or 0, bgColor.a or 255
+        ))
+    end
+end
+
+function Self.BuildMacro(id, label, commandList)
     local commands = {}
 
-    for _, command in ipairs(arg) do
+    for _, command in ipairs(commandList) do
         if type(command) == 'table' then
             table.extend(commands, command)
         else
@@ -152,11 +228,23 @@ function Self.BuildMacro(id, label, ...)
 
     for i, command in ipairs(commands) do
         if type(command) ~= 'string' then
-            Panic("BuildMacro function only takes tables or strings")
+            Panic("BuildMacro function only takes tables or strings.")
         end
 
         Cmd(Fmt("Insert Macro %d.%d", id, i))
         Cmd(Fmt("Set Macro %d.%d Property 'Command' \"%s\"", id, i, command))
+    end
+end
+
+function Self.BuildMacroGroup(offset, options, buttons)
+    for i, button in ipairs(buttons) do
+        local id = offset + i - 1
+
+        Self.BuildMacro(id, button.label or "BT Button", {
+            Fmt("Assign Appearance %d At Macro %d Thru %d", options.offAppearance, offset, offset + #buttons - 1),
+            Fmt("Assign Appearance %d At Macro %d", options.onAppearance, id),
+            button.commands
+        })
     end
 end
 

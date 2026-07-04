@@ -5,6 +5,7 @@
   "path": "BuskingTools",
   "components": [
     { "name": "Core", "file": "core.lua" },
-    { "name": "Utilities", "file": "utils.lua" }
+    { "name": "Utilities", "file": "utils.lua" },
+    { "name": "Color Picker", "file": "color_picker.lua" }
   ]
 }
